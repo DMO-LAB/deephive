@@ -1,16 +1,29 @@
-from gym.utils import seeding
-from gym import spaces
-from collections import deque
-from typing import Optional, Tuple, Union, List, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import gym
 import numpy as np
+from gym import spaces
 
 
-class OptEnv(gym.Env):
-    def __init__(self, env_name, optFunc, n_agents, n_dim, 
-                 bounds, ep_length,freeze=False, 
-                 init_state=None, opt_bound=0.9, 
-                 reward_type="full", opt_value=None):
+class OptimizationEnv(gym.Env):
+    def __init__(self, env_name: str, optFunc: callable, n_agents: int, n_dim: int, 
+                 bounds: Tuple[float, float], ep_length: int, 
+                 init_state: Optional[np.ndarray] = None, opt_bound: float = 0.9, 
+                 reward_type: str = "full", freeze: bool = False, opt_value: float = 0.9):
+        """
+        Args:
+            env_name: name of the environment
+            optFunc: function to optimize
+            n_agents: number of agents
+            n_dim: dimension of the problem
+            bounds: bounds of the problem
+            ep_length: length of the episode
+            init_state: initial state of the agents
+            opt_bound: optimal bound
+            reward_type: type of reward function
+            freeze: whether to freeze the best agent
+            opt_value: optimal value
+        """
         self.env_name = env_name
         self.optFunc = optFunc
         self.n_agents = n_agents
@@ -27,31 +40,42 @@ class OptEnv(gym.Env):
     def _reset_buffer(self):
         self.current_step = 0
         self.bestAgentHistory = []
+        self.min_pos = self.bounds[0]
+        self.max_pos = self.bounds[1]
         self.stateHistory_vec = np.zeros((self.n_agents, self.ep_length+1, self.n_dim))
         self.ValueHistory_vec = np.zeros((self.n_agents, self.ep_length+1))
+
         self.lower_bound_actions = np.array(
             [-np.inf for _ in range(self.n_dim)], dtype=np.float64)
         self.upper_bound_actions = np.array(
             [np.inf for _ in range(self.n_dim)], dtype=np.float64)
         self.lower_bound_obs = np.append(np.array(
-            [self.min_pos for _ in range(self.n_dim)], dtype=np.float64), -np.inf)
+            [self.min_pos[i] for i in range(self.n_dim)], dtype=np.float64), -np.inf)
         self.upper_bound_obs = np.append(np.array(
-            [self.max_pos for _ in range(self.n_dim)], dtype=np.float64), np.inf)
+            [self.max_pos[i] for i in range(self.n_dim)], dtype=np.float64), np.inf)
         
         self.low = np.array([self.lower_bound_obs for _ in range(self.n_agents)])
         self.high = np.array([self.upper_bound_obs for _ in range(self.n_agents)])
-
         self.action_low = np.array([self.lower_bound_actions for _ in range(self.n_agents)])
         self.action_high = np.array([self.upper_bound_actions for _ in range(self.n_agents)])
 
         self.action_space = spaces.Box(
-            low=self.action_low, high=self.action_high, shape=(
-                 self.n_agents,self.n_dim), dtype=np.float64
-        )
+            low=self.action_low, high=self.action_high, dtype=np.float64)
         self.observation_space = spaces.Box(
-            self.low, self.high, dtype=np.float64)
+            low=self.low, high=self.high, dtype=np.float64)
     
-    def step(self, actions):
+    def step(self, actions: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Run one timestep of the environment's dynamics.
+        Accepts an action and returns a tuple (observation, reward, done, info).
+        Args:
+            actions: actions to take
+        Returns:
+            observation: agent's observation of the current environment
+            reward: amount of reward returned after previous action
+            done: whether the episode has ended, in which case further step() calls will return undefined results
+            info: contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
+        """
         assert self.action_space.contains(actions), f"{actions!r} ({type(actions)}) invalid"
         agents_done = []
         states = self.state.copy()
@@ -76,7 +100,6 @@ class OptEnv(gym.Env):
         if np.max(self.obj_values) > self.best:
             self.best = np.max(self.obj_values)
             self.bestAgentChange += 1
-            #print(f"New Best objective value: {self.best:.4f}")
         if np.min(self.obj_values) < self.worst:
             self.worst = np.min(self.obj_values)
 
@@ -93,7 +116,14 @@ class OptEnv(gym.Env):
         
         return self.state, agents_rewards, agents_done, self.obj_values
     
-    def _get_stuck_agents(self, threshold=2):
+    def _get_stuck_agents(self, threshold: int = 2) -> List[int]:
+        """
+        Check if agents are stuck in a local minimum
+        Args:
+            threshold: number of previous steps to check
+        Returns:
+            stuck_agents: list of agents that are stuck
+        """
         prev_state = np.round(
             self.ValueHistory_vec[:, self.current_step - threshold], 4)
         if np.any(prev_state == self.obj_values):
@@ -106,7 +136,14 @@ class OptEnv(gym.Env):
         else:
             return []
     
-    def _reward_fcn_vec(self, threshold=2):
+    def _reward_fcn_vec(self, threshold: int = 2) -> np.ndarray:
+        """
+        Reward function for all agents
+        Args:
+            threshold: number of previous steps to check
+        Returns:
+            reward: reward for each agent
+        """
         if self.reward_type == "full":
             reward = 10*(self.state[:, -1] - self.zprev)
         elif self.reward_type == "sparse":
@@ -126,8 +163,13 @@ class OptEnv(gym.Env):
         return reward
     
 
-    def _get_actual_state(self, state=None):
-        """ Get the actual state of the agents by rescaling the state to the original bounds"""
+    def _get_actual_state(self, state: np.ndarray = None) -> np.ndarray:
+        """ Get the actual state of the agents by rescaling the state to the original bounds
+        Args:
+            state: state to rescale
+        Returns:
+            actual_state: actual state of the agents
+        """
         if state is None:
             state = self.state.copy()
             obj_value = self.obj_values.copy()
@@ -141,6 +183,10 @@ class OptEnv(gym.Env):
         return actual_state
             
     def _generate_init_state(self):
+        """ Generate a random initial state for all agents
+        Returns:
+            init_state: initial state of all agents
+        """
         if self.init_state is None:
             init_pos = np.round(np.random.uniform(
                 low=self.low[0][:-1], high=self.high[0][:-1],), decimals=2)
@@ -158,8 +204,12 @@ class OptEnv(gym.Env):
         return init_obs
     
     def reset(self, seed: Optional[int] = None):
-        #super().reset()
-        
+        """ Reset the environment
+        Args:
+            seed: random seed
+        Returns:
+            state: initial state of all agents
+        """
         self.state = self._generate_init_state()
         self.stateHistory_vec[:, self.current_step, :] = self._get_actual_state()[:, :-1]
         self.ValueHistory_vec[:, self.current_step] = self.obj_values
@@ -171,14 +221,24 @@ class OptEnv(gym.Env):
         self.bestAgentChange = 0
         return np.array(self.state, dtype=np.float32)
     
-    def _scale(self, d, dmin, dmax):
-        # dmin = np.array(dmin)
-        # dmax = np.array(dmax)
-        """ Scale the input to the range [0, 1] """
+    def _scale(self, d: np.ndarray, dmin: np.ndarray, dmax: np.ndarray):
+        """ Scale the input to the range [0, 1]
+        Args:
+            d: input to scale
+            dmin: minimum value of the input
+            dmax: maximum value of the input
+        Returns:
+            scaled_d: scaled input
+        """
         return (d-dmin)/((dmax-dmin) + 10e-9)
         
-    def _rescale(self, d, dmin, dmax):
-        # dmin = np.array(dmin)
-        # dmax = np.array(dmax)
-        """ Rescale the input to the range [dmin, dmax] """
+    def _rescale(self, d: np.ndarray, dmin: np.ndarray, dmax: np.ndarray):
+        """ Rescale the input to the range [dmin, dmax]
+        Args:
+            d: input to rescale
+            dmin: minimum value of the input
+            dmax: maximum value of the input
+        Returns:
+            rescaled_d: rescaled input
+        """
         return (d*(dmax-dmin)+ dmin)
