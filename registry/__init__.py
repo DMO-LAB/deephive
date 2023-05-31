@@ -106,37 +106,29 @@ class Registry:
             with open(load_dir, 'rb') as f:
                 self.envs = pickle.load(f)
 
-    def _save_obj_funcs(self, file_name:str):
-        """ Saves the registered objective functions to a file.
-        :param file_name: The name of the file.
+    def _get_all_envs(self) -> Dict[str, OptimizationEnv]:
+        """ Returns all the registered environments.
+        :return: The registered environments.
         """
-        save_dir = f"registry/{file_name}"
-        os.makedirs(os.path.dirname(save_dir), exist_ok=True)
-        with open(save_dir, 'wb') as f:
-            pickle.dump(self.obj_funcs, f)
+        return self.envs
 
-    def _load_obj_funcs(self, file_name:str):
-        """ Loads the registered objective functions from a file.
-        :param file_name: The name of the file.
-        """
-        load_dir = f"registry/{file_name}"
-        if os.path.exists(load_dir):
-            with open(load_dir, 'rb') as f:
-                self.obj_funcs = pickle.load(f)
+    # def _save_obj_funcs(self, file_name:str):
+    #     """ Saves the registered objective functions to a file.
+    #     :param file_name: The name of the file.
+    #     """
+    #     save_dir = f"registry/{file_name}"
+    #     os.makedirs(os.path.dirname(save_dir), exist_ok=True)
+    #     with open(save_dir, 'wb') as f:
+    #         pickle.dump(self.obj_funcs, f)
 
-    def _save(self, file_name:str):
-        """ Saves the registered environments and objective functions to a file.
-        :param file_name: The name of the file.
-        """
-        self._save_envs(file_name)
-        self._save_obj_funcs(file_name)
-
-    def _load(self, file_name:str):
-        """ Loads the registered environments and objective functions from a file.
-        :param file_name: The name of the file.
-        """
-        self._load_envs(file_name)
-        self._load_obj_funcs(file_name)
+    # def _load_obj_funcs(self, file_name:str):
+    #     """ Loads the registered objective functions from a file.
+    #     :param file_name: The name of the file.
+    #     """
+    #     load_dir = f"registry/{file_name}"
+    #     if os.path.exists(load_dir):
+    #         with open(load_dir, 'rb') as f:
+    #             self.obj_funcs = pickle.load(f)
 
 
 

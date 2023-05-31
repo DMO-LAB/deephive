@@ -158,6 +158,9 @@ def plot_agents_trajectory_combined(env, plot_directory, gif_dir, title="exp.gif
                 else:
                     pos = agents_pos[i][count]
                     plt.plot(pos[0], pos[1], marker=markers[0], markersize=15, markerfacecolor='k')
+        
+        elif env.n_dim > 2:
+            raise ValueError("Cannot plot more than 2 dimensions")
 
         plt.text(1, 1, f"Step {count + 1}", style='italic', horizontalalignment='left', verticalalignment='top',
                  transform=ax.transAxes, bbox={'facecolor': 'blue', 'alpha': 0.5, 'pad': 10})

@@ -115,7 +115,10 @@ class DeepHive:
             print(f"Global best values: {global_best_values} | Global best fitness: {global_best_fitness}")
 
             # plot the trajectory of the agents
-            plot_agents_trajectory_combined(self.env, self.plot_dir, self.gif_dir, title=f"run_{i+1}.gif",)
+            try:
+                plot_agents_trajectory_combined(self.env, self.plot_dir, self.gif_dir, title=f"run_{i+1}.gif",)
+            except Exception as e:
+                print(f"Error during rendering: {e}")
             
 
     def _train(self, debug=False):
@@ -172,7 +175,10 @@ class DeepHive:
 
             # render the environment
             if episode % self.render_interval == 0:
-                plot_agents_trajectory_combined(self.env, self.plot_dir, self.gif_dir, title=f"episode_{episode}.gif",)
+                try:
+                    plot_agents_trajectory_combined(self.env, self.plot_dir, self.gif_dir, title=f"episode_{episode}.gif")
+                except Exception as e:
+                    print(f"Error during rendering: {e}")
 
 
 
