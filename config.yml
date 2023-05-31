@@ -35,14 +35,14 @@ policy_config:
   
 test_policy_config:
   init_std: 0.3
-  std_min: 0.02
-  std_max: 0.2
+  std_min: 0.05
+  std_max: 0.3
   std_type: 'euclidean'
   fixed_std: True
   std_decay_rate: 0.02
   learn_std: True
   std_mode: hybrid
-  ckpt_folder: models/model.pth
+  ckpt_folder: logs/cosmix_train/checkpoints/policy-900.pth
   state_dim: 4
   action_dim: 1
   hidden_dim: [32, 32]
