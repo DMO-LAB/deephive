@@ -1,0 +1,71 @@
+environment_config:
+  n_agents: 20
+  n_dim: 2
+  ep_length: 20
+  freeze: True
+  fps: 0.8
+  use_actual_best: True
+  reward_type: full
+  opt_bound: 0.9
+  envs_cache_path: 'envRegistry.pkl'
+
+policy_config:
+  state_dim: 4
+  action_dim: 1
+  init_std: 0.3
+  std_min: 0.05
+  std_max: 0.3
+  std_type: 'linear_decay'
+  fixed_std: True
+  std_pow: 1
+  std_switch_time: 4000
+  hidden_dim: [32, 32]
+  lr: 0.00001
+  betas: 0.999
+  gamma: 0.9
+  K_epochs: 32
+  eps_clip: 0.2
+  initialization: None
+  pretrained: False
+  learn_std: False
+  activation: None
+  decay_rate: 0.001
+  ckpt_folder: 
+  std_mode: hybrid
+  
+test_policy_config:
+  init_std: 0.3
+  std_min: 0.02
+  std_max: 0.2
+  std_type: 'euclidean'
+  fixed_std: True
+  std_decay_rate: 0.02
+  learn_std: True
+  std_mode: hybrid
+  ckpt_folder: models/model.pth
+  state_dim: 4
+  action_dim: 1
+  hidden_dim: [32, 32]
+  pretrained: True
+  std_type: linear_decay
+  initialization: None
+  lr: 0.00001
+  betas: 0.999
+  gamma: 0.9
+  K_epochs: 32
+  eps_clip: 0.2
+
+run_config:
+  n_run: 5
+
+train_config:
+  max_episodes: 1000
+  use_gbest: False
+  update_timestep: 50
+  save_interval: 100
+  render_interval: 100
+  decay_timestep: 50
+  log_interval: 100
+  save_cutoff: 50
+
+

@@ -3,6 +3,7 @@
 import math
 from typing import Callable, List, Tuple
 import numpy as np
+from commons.heat_exchanger import HeatExchangerModel
 
 # create the sphere function that takes an array of parameters and returns an array of fitness values
 def sphere(params:np.ndarray, minimize=False, plotable=False) -> np.ndarray:
@@ -29,9 +30,9 @@ def sphere(params:np.ndarray, minimize=False, plotable=False) -> np.ndarray:
     else:
         fitness = np.sum(np.square(params), axis=1)
     # check if the fitness should be minimized
-    return fitness if minimize else -fitness
+    return fitness if minimize else -fitness # type: ignore
 
-def minmax_function(params:np.ndarray, minimize=False, plotable=False) -> np.ndarray:
+def minmax_function(params:np.ndarray, minimize=False, plotable=False) -> np.ndarray: # type: ignore
     """ The cosine mixture function.
     :param params: The parameters.
     :param minimize: Whether to minimize or maximize the fitness function.
@@ -174,18 +175,21 @@ def cos_function(params:np.ndarray, minimize=False, plotable=False) -> np.ndarra
     else:
         fitness = np.sum(np.cos(params - 2), axis=1) + (np.sum(np.cos(2 * params - 4), axis=1)) + (np.sum(np.cos(4 * params - 8), axis=1))
     # check if the fitness should be minimized
-    return -fitness if minimize else fitness
+    return np.multiply(fitness, -1) if minimize else fitness
+
 
 def get_obj_func(name):
     """ Returns the objective function with the given name.
     :param name: The name of the objective function.
-    :return: The objective function and thier bounds.
+    :return: The objective function and their bounds.
     """
     return {
-        'sphere': (sphere, [(-3, -3),(3, 3)], 0, "maximize"),
-        'minmax': (minmax_function, [(-3, -3),(3, 3)], 8.107, "maximize"),
-        'cosine_mixture': (cosine_mixture, [(-1, -1), (1, 1)], 0.2, "maximize"),
-        'ghabit': (ghabit, [(-3, -3),(3, 3)], 1.058, "maximize"),
-        'cos_function': (cos_function, [(-2, -2),(4, 4)], 6, "maximize"),
+        'sphere': (sphere, [np.array([-3, -3]),np.array([3, 3])], 0, "maximize"),
+        'minmax': (minmax_function, [np.array([-3, -3]),np.array([3, 3])], 8.107, "maximize"),
+        'cosine_mixture': (cosine_mixture, [np.array([-1, -1]), np.array([1, 1])], 0.2, "maximize"),
+        'ghabit': (ghabit, [np.array([-3, -3]), np.array([3, 3])], 1.058, "maximize"),
+        'cos_function': (cos_function, [np.array([-2, -2]),np.array([4, 4])], 6, "maximize"),
+        'heat_exchanger': (HeatExchangerModel.objective_function, [np.array([0.015, 0.1, 0.05]),np.array([0.051, 1.5, 0.5])], -49322.8, "maximize")
     }.get(name)
+    
     

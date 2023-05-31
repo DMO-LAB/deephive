@@ -1,164 +1,178 @@
-import tools
+from src.environment import OptimizationEnv
+from src.mappo import MAPPO
+from distutils.util import strtobool
 import os
 import numpy as np
-from mappo import PPO
-import neptune.new as neptune
-from decouple import config as conf
 from datetime import datetime
-from distutils.util import strtobool
-import parameter as param
+from commons.utils import plot_agents_trajectory_combined, plot_num_function_evaluation
+
+class DeepHive:
+    def __init__(self, title, env, policy, mode, config, **kwargs):
+        self.title = title
+        self.env = env
+        self.policy = policy
+        self.config = config
+        self.env_cache = kwargs.get('env_cache', None)
+        self.exp_name, self.directory, self.plot_dir, self.gif_dir, self.checkpoint_dir = self._create_work_dir(
+            title, log_folder="logs")
+        self.mode = mode
+        self._set_parameters()
+        self._run_summary()
+
+    def _set_parameters(self):
+        self.n_agents = self.config['environment_config']['n_agents']
+        self.n_dim = self.config['environment_config']['n_dim']
+        self.ep_length = self.config['environment_config']['ep_length']
+        if self.mode == 'test':
+            self.n_run = self.config['run_config']['n_run']
+        if self.mode == 'train':
+            self.max_episodes = self.config['train_config']['max_episodes']
+            self.update_timestep = self.config['train_config']['update_timestep']
+            self.save_interval = self.config['train_config']['save_interval']
+            self.render_interval = self.config['train_config']['render_interval']
+            self.decay_timestep = self.config['train_config']['decay_timestep']
+            self.log_interval = self.config['train_config']['log_interval']
+            self.decay_rate = self.config['policy_config']['decay_rate']
+            self.save_cutoff = self.config['train_config']['save_cutoff']
+            self.learn_std = self.config['policy_config']['learn_std']
+            self.std_min = self.config['policy_config']['std_min']
+            self.std_max = self.config['policy_config']['std_max']       
+        self.use_gbest = self.config['train_config']['use_gbest']
+
+    def _run_summary(self):
+        print(f"{self.title} : {self.mode.upper()} RUN SUMMARY")
+        print(f"Environment: {self.env.env_name}")
+        print(f"Number of agents: {self.n_agents}")
+        print(f"Number of dimensions: {self.n_dim}")
+        print(f"Episode length: {self.ep_length}")
+        if self.mode == 'test':
+            print(f"Number of runs: {self.n_run}")
+
+    def _create_work_dir(self, title, log_folder="logs"):
+        exp_name = title
+        directory = f"{log_folder}/{exp_name}"
+        plot_dir = f"{directory}/plots"
+        gif_dir = f"{directory}/gifs"
+        checkpoint_dir = f"{directory}/checkpoints"
+        os.makedirs(directory, exist_ok=True)
+        os.makedirs(plot_dir, exist_ok=True)
+        os.makedirs(gif_dir, exist_ok=True)
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        return exp_name, directory, plot_dir, gif_dir, checkpoint_dir
+
+    def optimize(self, debug=False):
+        try:
+            if self.mode == 'train':
+                self._train(debug=debug)
+            elif self.mode == 'test':
+                self._test(debug=debug)
+        except Exception as e:
+            print(f"Error during {self.mode} optimization: {e}")
+
+    def _test(self, debug=False):
+        for i in range(self.n_run):
+            print(f"*************Run: {i+1}/{self.n_run}***************")
+            states = self.env.reset()
+            objectives = self.env.obj_values
+            personal_best = states.copy()
+            global_best = personal_best[np.argmax(personal_best[:, -1])].copy()
+            state_history = np.zeros((self.ep_length, self.n_agents, self.n_dim))
+            episode_return = np.zeros(self.n_agents)
+            start_time = datetime.now()
+            for step in range(self.ep_length): 
+                if debug:
+                    print(f"Step: {step+1}/{self.ep_length}", end='\r')
+                # get observations 
+                observations, std = self.env._generate_observations(personal_best, global_best, use_gbest=self.use_gbest)
+                # get actions
+                actions = np.zeros((self.n_agents, self.n_dim))
+                for dim in range(self.n_dim):
+                    action = self.policy.select_action(observations[dim], std[dim])
+                    actions[:, dim] = action
+                    
+                # get next states
+                states, rewards, dones, obj_values = self.env.step(actions)
+                for agent in range(self.n_agents):
+                    self.policy.buffer.rewards += [rewards[agent]] * self.n_dim
+                    self.policy.buffer.is_terminals += [dones[agent]] * self.n_dim
+                state_history[step, :, :] = self.env._rescale(states[:, :-1], self.env.min_pos, self.env.max_pos)
+                episode_return += rewards
+                # update personal best
+                personal_best[np.where(obj_values > objectives)[0]] = states[np.where(obj_values > objectives)[0]]
+                objectives = np.maximum(objectives, obj_values)
+                # update global best
+                global_best = personal_best[np.argmax(objectives)].copy()
+
+            episode_best = self.env.bestAgentHistory[self.env.current_step]
+            number_of_best_changes = self.env.bestAgentChange
+            end_time = datetime.now()
+            total_runtime = (end_time - start_time).total_seconds()
+            if debug:
+                print(f"Episode best: {episode_best} | Number of best changes: {number_of_best_changes} | Total runtime: {total_runtime}")
+            # get best agent values
+            global_best_values = self.env._rescale(global_best[:-1], self.env.min_pos, self.env.max_pos)
+            global_best_fitness = objectives[np.argmax(objectives)]
+            print(f"Global best values: {global_best_values} | Global best fitness: {global_best_fitness}")
+
+            # plot the trajectory of the agents
+            plot_agents_trajectory_combined(self.env, self.plot_dir, self.gif_dir, title=f"run_{i+1}.gif",)
+            
+
+    def _train(self, debug=False):
+        timestep = 0
+        average_return = []
+        for episode in range(self.max_episodes):
+            states = self.env.reset()
+            objectives = self.env.obj_values
+            personal_best = states.copy()
+            global_best = personal_best[np.argmax(objectives)].copy()
+            state_history = np.zeros((self.ep_length, self.n_agents, self.n_dim))
+            episode_return = np.zeros(self.n_agents)
+            start_time = datetime.now()
+            for step in range(self.ep_length):
+                # get observations 
+                observations, std = self.env._generate_observations(personal_best, global_best, use_gbest=self.use_gbest)
+                # get actions
+                actions = np.zeros((self.n_agents, self.n_dim))
+                for dim in range(self.n_dim):
+                    action = self.policy.select_action(observations[dim], std[dim])
+                    actions[:, dim] = action
+                    
+                # get next states
+                states, rewards, dones, obj_values = self.env.step(actions)
+                for agent in range(self.n_agents):
+                    self.policy.buffer.rewards += [rewards[agent]] * self.n_dim
+                    self.policy.buffer.is_terminals += [dones[agent]] * self.n_dim
+                state_history[step, :, :] = self.env._rescale(states[:, :-1], self.env.min_pos, self.env.max_pos)
+                episode_return += rewards
+                # update personal best
+                personal_best[np.where(obj_values > objectives)[0]] = states[np.where(obj_values > objectives)[0]]
+                objectives = np.maximum(objectives, obj_values)
+                # update global best
+                global_best = personal_best[np.argmax(objectives)].copy()
+                
+                if step == self.ep_length - 1:
+                    average_return.append(np.mean(episode_return))
+
+                timestep += 1
+                # update the policy
+                if timestep % self.update_timestep == 0:
+                    self.policy.update()
+
+                # decay the std
+                if timestep % self.decay_timestep == 0:
+                    self.policy.decay_action_std(self.decay_rate, self.std_min, self.learn_std)
+            
+            # save the policy
+            if episode % self.save_interval == 0:
+                if all(a > self.save_cutoff for a in average_return[-3:]):
+                    checkpoint_path = self.checkpoint_dir + "/policy-" + str(episode) + ".pth"
+                    self.policy.save(self.checkpoint_dir, episode)
+                    average_return = []
+
+            # render the environment
+            if episode % self.render_interval == 0:
+                plot_agents_trajectory_combined(self.env, self.plot_dir, self.gif_dir, title=f"episode_{episode}.gif",)
 
 
-def main(env_name, title, config, policy, env_cache):
-    exp_name, directory, plot_dir, gif_dir, checkpoint_dir = tools.create_work_dir(title, log_folder="logs")
-    # get necessary parameters from config
-    n_agents = config['test_config']['n_agents']
-    n_dim = config['test_config']['n_dim']
-    ep_length = config['test_config']['ep_length']
-    n_run = config['test_config']['n_run']
-    env = env_cache.get_env(env_name)
-    total_run_time = 0
-    f = []
-    bestValues = []
-    split_agent = config['test_config']['split_agent']
-    print("TESTING RUN SUMMARY")
-    print(f"Environment: {env_name}")
-    print(f"Number of agents: {n_agents}")
-    print(f"Number of dimensions: {n_dim}")
-    print(f"Episode length: {ep_length}")
-    print(f"Number of runs: {n_run}")
-    print(f"Split agent: {split_agent}")
-    print(f"Title: {title}")
-    if not split_agent:
-        print(f"Minimum std: {param.test_min_std}")
-        print(f"Inital std: {param.test_init_std}")
-        print(f"Decay rate: {param.test_std_decay_rate}")
-    else:
-        print(f"Minimum std: {param.explore_min_std} (exploration), {param.exploit_min_std} (exploitation)")
-        print(f"Inital std: {param.explore_init_std} (exploration), {param.exploit_init_std} (exploitation)")
-        print(f"Decay rate: {param.explore_std_decay_rate} (exploration), {param.exploit_std_decay_rate} (exploitation)")
-    
-    for run in range(n_run):
-        if not split_agent:
-            policy.set_action_std(param.test_init_std)
-        else:
-            policy.set_action_std(param.explore_init_std, policy_type='exploration')
-            policy.set_action_std(param.exploit_init_std, policy_type='exploitation')
-        start_time = datetime.now()
-        print(f"Run: {run+1}/{n_run}")
-        states = env.reset()
-        bestState = states.copy()
-        GbestState = bestState[np.argmax(bestState[:, -1])].copy()
-        stateHistory = [[] for _ in range(n_agents)] # list of lists of states
-        episode_return = [0 for _ in range(n_agents)] if not split_agent else {
-            'exploration_episode_return': [0 for _ in range(n_agents)],
-            'exploitation_episode_return': [0 for _ in range(n_agents)]
-        }
-        average_return = [] if not split_agent else {
-            'exploration_average_return': [],
-            'exploitation_average_return': []
-        }
-        optAgentTrajectory = []    # trajectory of optimal agent
-        bestStateValue = []
-        bestStateValue.append(env.best)
-        for agent in range(n_agents):
-            stateHistory[agent].append(tools.rescale_(states[agent][:-1], env.min_pos, env.max_pos))
-        for step in range(ep_length):
-            print(f"Step: {step+1}/{ep_length}", end='\r')
-            actions = np.zeros((env.n_agents, env.n_dim))
-            if not split_agent:
-                obs, std_obs = tools.get_agents_obs(states, n_agents, n_dim, bestState, GbestState, F=False, std="euclidean", use_gbest=param.test_use_gbest)
-                #actions = [[[] for _ in range(n_dim)] for _ in range(n_agents)]
-                for dim in range(n_dim):
-                    agent_act = policy.select_action(obs[dim], std_obs[dim])
-                    actions[:, dim] = agent_act
 
-                #actions = tools.get_agent_actions(agent_action, n_agents=n_agents, n_dim=n_dim)
-            else:
-                exploit_states = states[env.exploiter]
-                explore_states = states[env.explorer]
-                exploit_obs, exploit_std_obs = tools.get_agents_obs(exploit_states, len(env.exploiter), n_dim, bestState, GbestState, F=False, std="euclidean", use_gbest=True)
-                explore_obs, explore_std_obs = tools.get_agents_obs(explore_states, len(env.explorer), n_dim, bestState, GbestState, F=False, std="euclidean", use_gbest=False)
-                for dim in range(n_dim):
-                    agent_act = policy.select_action(exploit_obs[dim], exploit_std_obs[dim], agent_type='exploitation')
-                    actions[env.exploiter, dim] = agent_act
-                    agent_act = policy.select_action(explore_obs[dim], explore_std_obs[dim], agent_type='exploration')
-                    actions[env.explorer, dim] = agent_act
-                    #print(actions[env.exploiter, dim], actions[env.explorer, dim])
-
-            next_state, rewards, done, obj_values = env.step(actions) 
-            states = next_state
-            optAgentTrajectory.append(max(obj_values))
-            bestStateValue.append(env.best)
-
-            if not split_agent:
-                policy.decay_action_std(param.test_std_decay_rate, param.test_min_std, param.test_learn_std)
-            else:
-                policy.decay_action_std(param.test_std_decay_rate, param.exploit_test_min_std, param.test_learn_std, policy_type='exploitation')
-                policy.decay_action_std(param.test_std_decay_rate, param.explore_test_min_std, param.test_learn_std, policy_type='exploration')
-
-
-            for agent in range(n_agents):
-                if policy.split_agent:
-                    if agent in env.exploiter:
-                        policy.exploitation_buffer.rewards += [rewards[agent]]*env.n_dim
-                        policy.exploitation_buffer.is_terminals += [done[agent]]*env.n_dim
-                    else:
-                        policy.exploration_buffer.rewards += [rewards[agent]]*env.n_dim
-                        policy.exploration_buffer.is_terminals += [done[agent]]*env.n_dim
-                else:
-                    policy.buffer.rewards += [rewards[agent]] * env.n_dim
-                    policy.buffer.is_terminals += [done[agent]] * env.n_dim
-
-                stateHistory[agent].append(tools.rescale_(next_state[agent][:-1], env.min_pos, env.max_pos))
-                if not split_agent:
-                    episode_return[agent] += rewards[agent] 
-                else:
-                    if agent in env.exploiter:
-                        episode_return['exploitation_episode_return'][agent] += rewards[agent]
-                    else:
-                        episode_return['exploration_episode_return'][agent] += rewards[agent]
-                # update best state
-                if next_state[agent][-1] > bestState[agent][-1]: # if the agent has improved its best state
-                    bestState[agent] = next_state[agent].copy() # update the best state
-                    GbestState = bestState[np.argmax(bestState[:, -1])].copy()
-
-        end_time = datetime.now()
-        total_run_time += (end_time - start_time).total_seconds()
-        print("Run time: ", end_time - start_time)
-        print(f"Run: {run+1}/{n_run} | Best state value: {env.best} | Total run time: {total_run_time}")
-
-        if param.plot_flag == True: #and run % (n_run/2) == 0:
-            gif_title =  gif_dir + env.env_name + "_" + str(run) + ".gif"
-            if n_dim == 1:
-                tools.plot_agents_trajectory(env,  plot_dir, env.env_name, ep_length=ep_length, title=gif_title, fps=2)
-            elif n_dim == 2:
-                tools.plot_agents_trajectory_2D(env,  plot_dir, env.env_name, ep_length=ep_length, title=gif_title, fps=3)
-            else:
-                pass 
-
-        f += [optAgentTrajectory]
-        bestValues += [bestStateValue]
-
-    ff = np.array(f).reshape(n_run, ep_length)
-    np.save(directory+"fitness.npy", ff), np.save(directory+"best_fitness.npy", np.array(bestValues))
-    tools.num_function_evaluation(ff, n_agents=n_agents, save_dir=directory+"num_function_evaluation.png", opt_value=env.opt_value)
-    tools.num_function_evaluation(np.array(bestValues),n_agents=n_agents, save_dir=directory+"num_function_evaluation_best.png", opt_value=env.opt_value)
-
-    print("Total run time: ", total_run_time)
-    print("Average run time: ", total_run_time/n_run)
-
-
-if __name__ == '__main__':
-    #os.chdir('vec')
-    # config
-    args = tools.get_args()
-    title = args.title
-    env_name = args.env
-    config_path = 'config.yml'
-    config = tools.get_config(config_path)
-    # prepare policy
-    policy = tools.prepare_policy(config, test=True)
-    # load the environment
-    envs_cache = tools.prepare_environment(config, load_from_file=False)
-    main(env_name, title=title,  config=config, policy=policy, env_cache=envs_cache)

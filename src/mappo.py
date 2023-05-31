@@ -3,7 +3,7 @@ import torch.distributions as tdist
 from torch.distributions import MultivariateNormal
 import torch.nn as nn
 import torch
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 random_seed = 47
 
@@ -82,7 +82,7 @@ class ActorCritic(nn.Module):
             'linear_decay': linear_decay,
         }
 
-    def set_action_std(self, new_action_std : float) -> torch.Tensor:
+    def set_action_std(self, new_action_std : float):
                 self.action_var = torch.full(
                     (self.action_dim,), new_action_std * new_action_std).to(device)
     
@@ -94,7 +94,7 @@ class ActorCritic(nn.Module):
         action_var = torch.from_numpy(std).to(device)
         return action_var
 
-    def act(self, state: torch.Tensor, std_obs: np.ndarray = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def act(self, state: torch.Tensor, std_obs: Optional[np.ndarray] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """ 
         Function to sample actions from the policy given the state.
         Args:
@@ -107,7 +107,7 @@ class ActorCritic(nn.Module):
         action_mean = self.actor(state)
     
         if self.learn_std:
-            action_var = self.get_std(std_obs)
+            action_var = self.get_std(std_obs) # type: ignore
             dist = tdist.Normal(action_mean, action_var)
         else:
             cov_mat = torch.diag(self.action_var).to(device)
@@ -116,14 +116,14 @@ class ActorCritic(nn.Module):
         action_logprob = dist.log_prob(action)
         return action.detach(), action_logprob.detach()
 
-    def evaluate(self, state: torch.Tensor, action: torch.Tensor, std_obs: np.ndarray = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def evaluate(self, state: torch.Tensor, action: torch.Tensor, std_obs: Optional[np.ndarray] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         state_value = self.critic(state)
         # For Single Action Environments.
         if self.action_dim == 1:
             action = action.reshape(-1, self.action_dim)
         action_mean = self.actor(state)
         if self.learn_std:
-            action_var = self.get_std(std_obs)
+            action_var = self.get_std(std_obs) # type: ignore
             dist = tdist.Normal(action_mean, action_var)
         else:
             cov_mat = torch.diag(self.action_var).to(device)
@@ -137,8 +137,8 @@ class ActorCritic(nn.Module):
 class MAPPO:
     def __init__(self, n_agents: int, n_dim: int, state_dim: int, action_dim: int, action_std: float, std_min: float,
                     std_max: float, std_type: str, learn_std: bool, layer_size: List[int],  lr: float = 0.0003, beta: float = 0.999,
-                    gamma: float = 0.99, K_epochs: int = 30, eps_clip: float = 0.2, pretrained: bool = False, ckpt_folder: str = None,
-                    initialization: str = None, **kwargs): 
+                    gamma: float = 0.99, K_epochs: int = 30, eps_clip: float = 0.2, pretrained: bool = False, ckpt_folder: Optional[str] = None,
+                    initialization: Optional[str] = None, **kwargs): 
         """
         Multi-Agent Proximal Policy Optimization Algorithm. 
         Args:
@@ -199,6 +199,10 @@ class MAPPO:
 
         self.MSE_loss = nn.MSELoss()
 
+
+    def __str__(self):
+             return f"MAPPO: {self.n_agents} agents, {self.n_dim} dimensions, {self.action_std} action std, {self.lr} lr, {self.beta} beta, {self.gamma} gamma, {self.K_epochs} epochs, {self.eps_clip} eps_clip"
+
     def select_action(self, state, std_obs):
         state = torch.FloatTensor(state).to(device)  # Flatten the state
         action, action_logprob = self.policy.act(state, std_obs)
@@ -242,13 +246,11 @@ class MAPPO:
         old_states = torch.stack(buffer.states).to(self.device).detach()
         old_actions = torch.stack(buffer.actions).to(self.device).detach()
         old_logprobs = torch.stack(buffer.logprobs).to(self.device).detach()
-        if self.split_agent:
-            old_std_obs = np.stack(buffer.std_obs)
-        else:
-            old_std_obs = buffer.std_obs
+        old_std_obs = buffer.std_obs
         return rewards, old_states, old_actions, old_logprobs, old_std_obs
 
     def _update_old_policy(self, policy, old_policy, optimizer, rewards, old_states, old_actions, old_logprobs, old_std_obs):
+        loss = None
         # Optimize policy for K epochs:
         for _ in range(self.K_epochs):
             # Evaluating old actions and values :
@@ -273,21 +275,24 @@ class MAPPO:
 
         # Copy new weights into old policy:
         old_policy.load_state_dict(policy.state_dict())
-        return loss.mean().item()
+        return loss.mean().item() if loss is not None else None
 
     def update(self):
-        # update general policy
+        # update gen eral policy
         rewards, old_states, old_actions, old_logprobs, old_std_obs = self.__get_buffer_info(
             self.buffer)
         loss = self._update_old_policy(self.policy, self.old_policy, self.optimizer,
                                     rewards, old_states, old_actions, old_logprobs, old_std_obs)
-        self.buffer.clear_memory()
-        print(f'[INFO]: policy updated with loss {loss} and buffer cleared')
-        assert len(self.buffer.states) == 0
+        if loss is not None:
+            self.buffer.clear_memory()
+            #print(f'[INFO]: policy updated with loss {loss} and buffer cleared')
+            assert len(self.buffer.states) == 0
+        else:
+            print(f'[ERROR]: policy update failed')
 
     #save policy
     def save(self, filename, episode=0):
-        torch.save(self.policy.state_dict(), filename + "policy-" + str(episode) + ".pth")
+        torch.save(self.policy.state_dict(), filename + "/policy-" + str(episode) + ".pth")
         print("Saved policy to: ", filename)
     
     def load(self, filename):
