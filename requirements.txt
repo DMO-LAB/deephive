@@ -5,4 +5,4 @@ numpy==1.22.2
 python-decouple==3.8
 PyYAML==6.0
 scipy==1.8.0
-torch==1.10.2+cu113
+torch==1.13.1
