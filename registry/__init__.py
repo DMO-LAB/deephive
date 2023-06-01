@@ -1,6 +1,6 @@
 import json 
 import os
-from typing import List, Tuple, Union, Dict
+from typing import List, Tuple, Union, Dict, Callable
 import numpy as np
 from src.environment import OptimizationEnv
 from src.mappo import MAPPO
@@ -45,7 +45,7 @@ class Registry:
             raise ValueError(f'The environment {env_name} is not registered.')
         del self.envs[env_name]
 
-    def add_obj_func(self, obj_func_name:str, obj_func:callable, bounds:Tuple[np.ndarray, np.ndarray]):
+    def add_obj_func(self, obj_func_name:str, obj_func:Callable, bounds:Tuple[np.ndarray, np.ndarray]):
         """ Adds an objective function to the registry.
         :param obj_func_name: The name of the objective function.
         :param obj_func: The objective function.
@@ -62,7 +62,7 @@ class Registry:
             raise ValueError(f'The objective function {obj_func_name} is already registered.')
         self.obj_funcs[obj_func_name] = (obj_func, bounds)
 
-    def get_obj_func(self, obj_func_name:str) -> Tuple[callable, Tuple[np.ndarray, np.ndarray]]:
+    def get_obj_func(self, obj_func_name:str) -> Tuple[Callable, Tuple[np.ndarray, np.ndarray]]:
         """ Returns the objective function with the given name.
         :param obj_func_name: The name of the objective function.
         :return: The objective function and their bounds.
@@ -111,25 +111,6 @@ class Registry:
         :return: The registered environments.
         """
         return self.envs
-
-    # def _save_obj_funcs(self, file_name:str):
-    #     """ Saves the registered objective functions to a file.
-    #     :param file_name: The name of the file.
-    #     """
-    #     save_dir = f"registry/{file_name}"
-    #     os.makedirs(os.path.dirname(save_dir), exist_ok=True)
-    #     with open(save_dir, 'wb') as f:
-    #         pickle.dump(self.obj_funcs, f)
-
-    # def _load_obj_funcs(self, file_name:str):
-    #     """ Loads the registered objective functions from a file.
-    #     :param file_name: The name of the file.
-    #     """
-    #     load_dir = f"registry/{file_name}"
-    #     if os.path.exists(load_dir):
-    #         with open(load_dir, 'rb') as f:
-    #             self.obj_funcs = pickle.load(f)
-
 
 
 

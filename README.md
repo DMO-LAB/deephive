@@ -1,46 +1,79 @@
-# DEEPHIVE - A reinforcement learning framework for black-box optimization
-DeepHive is a reinforcement learning framework for optimizing black-box functions. It uses a combination of exploitation and exploration agents to search for high-quality solutions in a given landscape.
+# DeepHive Optimization
 
-### Features
-- Uses multi-agent reinforcement learning to optimize black-box functions
-- Combines exploitation and exploration agents to search for high-quality solutions
-- Supports continuous and discrete observations and actions
-- Can scale to large search spaces and complex problems
-- Can scale to different number of agents
-- Provides built-in plotting and visualization tools to track progress and performance
+DeepHive is an optimization framework that combines Multi-Agent Proximal Policy Optimization (MAPPO) with a swarm intelligence-inspired algorithm to solve optimization problems in various domains. It utilizes deep reinforcement learning techniques to train a policy that guides a swarm of agents in searching for optimal solutions.
+
+## Features
+
+- Multi-Agent Proximal Policy Optimization (MAPPO) algorithm for swarm-based optimization.
+- Support for various optimization environments and objective functions.
+- Training and testing modes for optimizing and evaluating the policy.
+- Logging support with Neptune.ai integration.
+- Configurable parameters for environment, policy, and training settings.
+- Visualization of agent trajectories and performance plots.
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.7 or higher
+- PyTorch
+- OpenAI Gym
+- Neptune.ai (optional)
 
 ### Installation
-To install DeepHive, clone the repository and install the required dependencies:
+
+1. Clone the repository:
 
 ```
-git clone https://github.com/elotech47/deephive.git
-cd deephive
+git clone https://github.com/your-username/deephive-optimization.git
+```
+
+2. Install the required dependencies:
+
+```
 pip install -r requirements.txt
 ```
+
 ### Usage
-To use DeepHive, define a black-box function to be optimized and create an instance of the DeepHiveOptimizer class. Then, call the optimize method to begin the optimization process:
+
+The DeepHive optimization framework can be used to train and test policies for solving optimization problems. The following steps outline the basic workflow:
+
+1. Prepare the configuration file: Edit the `config.yml` file to specify the environment settings, policy configuration, and training parameters.
+
+2. Register the environment: If you have a custom optimization environment, add it to the `src/environment.py` file by extending the `OptimizationEnv` class. Alternatively, use one of the pre-defined environments provided.
+
+3. Define the objective function: If you have a custom objective function, add it to the `commons/objective_functions.py` file and update the `get_obj_func` function to include it.
+
+4. Train the policy: Run the following command to train the policy:
 
 ```
-from deephive import DeepHiveOptimizer
-
-def my_function(x, y):
-  return x ** 2 + y ** 2
-
-optimizer = DeepHiveOptimizer(my_function, continuous_observations=True)
-result = optimizer.optimize()
-
-print(result)
+python main.py --config config.yml --title my_experiment --env my_environment --mode train
 ```
 
-For more detailed usage examples and documentation, see the DeepHive documentation.
+This will start the training process with the specified configuration, environment, and experiment title. The trained policy checkpoints will be saved in the `logs/my_experiment/checkpoints` directory.
 
-### Contributing
-We welcome contributions to DeepHive! If you have an idea for a feature or bug fix, please open an issue or pull request on GitHub.
+5. Test the policy: Once the policy is trained, you can test it by running the following command:
 
-### License
-DeepHive is released under the MIT License.
+```
+python main.py --config config.yml --title my_experiment --env my_environment --mode test
+```
 
+This will evaluate the policy on the specified environment using the trained checkpoints.
 
-## TO DO
-- write tests
-- extend to any optimization functions
+### Customization
+
+- Environment: To add a custom environment, create a new class in the `src/environment.py` file by extending the `OptimizationEnv` class. Implement the required methods and register the environment in the `Registry` class.
+
+- Objective Functions: To add a custom objective function, define the function in the `commons/objective_functions.py` file and update the `get_obj_func` function to include it.
+
+- Configuration: The `config.yml` file allows you to customize various parameters related to the environment, policy, and training settings. Modify the file according to your requirements.
+
+- Logging: The framework supports logging experiments using Neptune.ai. To enable logging, set the `log` flag to `True` and specify the Neptune.ai API key in the `neptune_secret_access_key` configuration. You can also provide tags to categorize and filter your experiments.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+The DeepHive Optimization framework is built on top of the Multi-Agent Proximal Policy Optimization (MAPPO) algorithm and is inspired by swarm intelligence concepts. The project utilizes libraries and tools such as PyTorch, OpenAI Gym, and Neptune.ai for deep reinforcement learning, environment modeling,
