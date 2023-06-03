@@ -77,6 +77,12 @@ There is an example [notebook](example.ipynb)
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
-
-The DeepHive Optimization framework is built on top of the Multi-Agent Proximal Policy Optimization (MAPPO) algorithm and is inspired by swarm intelligence concepts. The project utilizes libraries and tools such as PyTorch, OpenAI Gym, and Neptune.ai for deep reinforcement learning, environment modeling,
+## Publication
+If you find this repository useful, please cite our [paper](https://arxiv.org/abs/2304.04751)
+```@article{ikponmwoba2023deephive,
+  title={DeepHive: A multi-agent reinforcement learning approach for automated discovery of swarm-based optimization policies},
+  author={Ikponmwoba, Eloghosa and Owoyele, Ope},
+  journal={arXiv preprint arXiv:2304.04751},
+  year={2023}
+}
+```
