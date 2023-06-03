@@ -5,6 +5,8 @@ import os
 import numpy as np
 from datetime import datetime
 from commons.utils import plot_agents_trajectory_combined, plot_num_function_evaluation
+import logging
+from logging_configuration import configure_logger
 
 class DeepHive:
     def __init__(self, title, env, policy, mode, config, **kwargs):
@@ -18,6 +20,8 @@ class DeepHive:
         self.mode = mode
         self._set_parameters()
         self._run_summary()
+        self.log = kwargs.get('log', True)
+        self.logger, self.run = configure_logger(title, local_only=True)
 
     def _set_parameters(self):
         self.n_agents = self.config['environment_config']['n_agents']
@@ -40,14 +44,24 @@ class DeepHive:
         self.use_gbest = self.config['train_config']['use_gbest']
 
     def _run_summary(self):
-        print(f"{self.title} : {self.mode.upper()} RUN SUMMARY")
-        print(f"Environment: {self.env.env_name}")
-        print(f"Number of agents: {self.n_agents}")
-        print(f"Number of dimensions: {self.n_dim}")
-        print(f"Episode length: {self.ep_length}")
-        if self.mode == 'test':
-            print(f"Number of runs: {self.n_run}")
+        if self.log:
+            self.logger.info(f"{self.title} : {self.mode.upper()} RUN SUMMARY")
+            self.logger.info(f"Environment: {self.env.env_name}")
+            self.logger.info(f"Number of agents: {self.n_agents}")
+            self.logger.info(f"Number of dimensions: {self.n_dim}")
+            self.logger.info(f"Episode length: {self.ep_length}")
+            if self.mode == 'test':
+                self.logger.info(f"Number of runs: {self.n_run}")
+        else:
+            print(f"{self.title} : {self.mode.upper()} RUN SUMMARY")
+            print(f"Environment: {self.env.env_name}")
+            print(f"Number of agents: {self.n_agents}")
+            print(f"Number of dimensions: {self.n_dim}")
+            print(f"Episode length: {self.ep_length}")
+            if self.mode == 'test':
+                print(f"Number of runs: {self.n_run}")
 
+        
     def _create_work_dir(self, title, log_folder="logs"):
         exp_name = title
         directory = f"{log_folder}/{exp_name}"
@@ -58,6 +72,8 @@ class DeepHive:
         os.makedirs(plot_dir, exist_ok=True)
         os.makedirs(gif_dir, exist_ok=True)
         os.makedirs(checkpoint_dir, exist_ok=True)
+        if self.log:
+            self.logger.info(f"All directories created successfully in {directory}")
         return exp_name, directory, plot_dir, gif_dir, checkpoint_dir
 
     def optimize(self, debug=False):
@@ -67,11 +83,16 @@ class DeepHive:
             elif self.mode == 'test':
                 self._test(debug=debug)
         except Exception as e:
+            if self.log:
+                self.logger.exception(f"Error during {self.mode} optimization:")
             print(f"Error during {self.mode} optimization: {e}")
+            
 
     def _test(self, debug=False):
         for i in range(self.n_run):
             print(f"*************Run: {i+1}/{self.n_run}***************")
+            if self.log:
+                self.logger.info(f"*************Run: {i+1}/{self.n_run}***************")
             states = self.env.reset()
             objectives = self.env.obj_values
             personal_best = states.copy()
@@ -79,30 +100,38 @@ class DeepHive:
             state_history = np.zeros((self.ep_length, self.n_agents, self.n_dim))
             episode_return = np.zeros(self.n_agents)
             start_time = datetime.now()
+            if self.log and debug:
+                self.logger.info(f"Start time: {start_time}")
             for step in range(self.ep_length): 
                 if debug:
                     print(f"Step: {step+1}/{self.ep_length}", end='\r')
+                    if self.log:
+                        self.logger.info(f"Step: {step+1}/{self.ep_length}")
                 # get observations 
                 observations, std = self.env._generate_observations(personal_best, global_best, use_gbest=self.use_gbest)
+                if debug and self.log:
+                    self.logger.info(f"Observations: {observations}")
+                    self.logger.info(f"Std: {std}")
                 # get actions
                 actions = np.zeros((self.n_agents, self.n_dim))
                 for dim in range(self.n_dim):
                     action = self.policy.select_action(observations[dim], std[dim])
                     actions[:, dim] = action
+                if debug and self.log:
+                    self.logger.info(f"Actions: {actions}")
                     
                 # get next states
                 states, rewards, dones, obj_values = self.env.step(actions)
-                for agent in range(self.n_agents):
-                    self.policy.buffer.rewards += [rewards[agent]] * self.n_dim
-                    self.policy.buffer.is_terminals += [dones[agent]] * self.n_dim
                 state_history[step, :, :] = self.env._rescale(states[:, :-1], self.env.min_pos, self.env.max_pos)
-                episode_return += rewards
+                
                 # update personal best
                 personal_best[np.where(obj_values > objectives)[0]] = states[np.where(obj_values > objectives)[0]]
                 objectives = np.maximum(objectives, obj_values)
-                # update global best
+                if debug and self.log:
+                    self.logger.info(f"Personal best: {personal_best}")
+                    self.logger.info(f"Objectives: {objectives}")
                 global_best = personal_best[np.argmax(objectives)].copy()
-
+                
             episode_best = self.env.bestAgentHistory[self.env.current_step]
             number_of_best_changes = self.env.bestAgentChange
             end_time = datetime.now()
@@ -124,6 +153,8 @@ class DeepHive:
     def _train(self, debug=False):
         timestep = 0
         average_return = []
+        total_time = 0
+        train_summary = {}
         for episode in range(self.max_episodes):
             states = self.env.reset()
             objectives = self.env.obj_values
@@ -172,7 +203,7 @@ class DeepHive:
                     checkpoint_path = self.checkpoint_dir + "/policy-" + str(episode) + ".pth"
                     self.policy.save(self.checkpoint_dir, episode)
                     average_return = []
-
+            total_time += (datetime.now() - start_time).total_seconds()
             # render the environment
             if episode % self.render_interval == 0:
                 try:

@@ -40,11 +40,11 @@ The DeepHive optimization framework can be used to train and test policies for s
 
 1. Prepare the configuration file: Edit the `config.yml` file to specify the environment settings, policy configuration, and training parameters.
 
-2. Register the environment: If you have a custom optimization environment, add it to the `src/environment.py` file by extending the `OptimizationEnv` class. Alternatively, use one of the pre-defined environments provided.
+2. Define the objective function: If you have a custom objective function, add it to the `commons/objective_functions.py` file and update the `get_obj_func` function to include it. You can also write a different script for the objective function like the [heat exchanger optimization problem](commons/heat_exchanger.py). Ensure to import it in the [here](commons/objective_functions.py)
 
-3. Define the objective function: If you have a custom objective function, add it to the `commons/objective_functions.py` file and update the `get_obj_func` function to include it.
+4. Train the policy: You can chose to train a policy on a new function or use the pretrained policy found in [models](models/model.pth). In order to train a new policy;
 
-4. Train the policy: Run the following command to train the policy:
+Run the following command to train the policy:
 
 ```
 python main.py --config config.yml --title my_experiment --env my_environment --mode train
@@ -58,7 +58,10 @@ This will start the training process with the specified configuration, environme
 python main.py --config config.yml --title my_experiment --env my_environment --mode test
 ```
 
-This will evaluate the policy on the specified environment using the trained checkpoints.
+This will evaluate the policy on the specified environment using the trained checkpoints. Make sure you update the model checkpoint in the [config](/config.yml) file under `test_policy_config`. The results of the optimization can be found in the logs folder with the experiment title. 
+
+### NB 
+There is an example [notebook](example.ipynb) 
 
 ### Customization
 

@@ -23,10 +23,8 @@ if __name__ == '__main__':
     config = get_config(args.config)
     # ENVIRONMENT
     env = get_environment(config, env_name, reinit=reinit)
-    print(env)
     # POLICY
     policy = get_policy(config, mode)
-    print(policy)
     # MAIN
     main(title, env, policy, mode=mode, config=config)
 
