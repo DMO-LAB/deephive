@@ -218,7 +218,7 @@ class MAPPO:
         self.policy.set_action_std(new_action_std)
         self.old_policy.set_action_std(new_action_std)
         
-    def decay_action_std(self, action_std_decay_rate, min_action_std=0.001, learn_std=False):
+    def decay_action_std(self, action_std_decay_rate, min_action_std=0.001, learn_std=False, **kwargs):
         if learn_std:
             pass
         else:
@@ -227,7 +227,8 @@ class MAPPO:
             if (self.action_std <= min_action_std):
                 self.action_std = min_action_std
             else:
-                print(f"setting action std to {self.action_std}")
+                if kwargs["verbose"]:
+                    print(f"setting action std to {self.action_std}")
             self.set_action_std(self.action_std)
         
     def __get_buffer_info(self, buffer):

@@ -5,6 +5,7 @@ from neptune.new.integrations.python_logger import NeptuneHandler
 from decouple import config as conf
 neptune_key = conf("neptune_secret_access_key", default='')
 
+
 def configure_logger(name, local_only=False, level=logging.INFO):
     """
     Configure the logger.
@@ -23,20 +24,24 @@ def configure_logger(name, local_only=False, level=logging.INFO):
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     # create the file handler
-    fh = logging.FileHandler(f'logs/{name}.log')
+    fh = logging.FileHandler(f'logs/{name}/{name}.log')
     fh.setLevel(level)
     fh.setFormatter(formatter)
     logger.addHandler(fh)
     # create the neptune handler
     if not local_only:
-        run = neptune.init(
-            project="elo/deephive",
-            api_token=neptune_key,
-            source_files=['*.py', 'config.yml'])
-        nh = NeptuneHandler(run=run, level=level)
-        nh.setLevel(level)
-        nh.setFormatter(formatter)
-        logger.addHandler(nh)
-        return logger, run
+        try:
+            run = neptune.init(
+                project="elo/deephive",
+                api_token=neptune_key,
+                source_files=['*.py', 'config.yml'])
+            nh = NeptuneHandler(run=run, level=level)
+            nh.setLevel(level)
+            nh.setFormatter(formatter)
+            logger.addHandler(nh)
+            return logger, run
+        except:
+            logger.warning('Neptune logging failed.')
+            return logger, None
     return logger, None
         

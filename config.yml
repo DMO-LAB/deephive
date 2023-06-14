@@ -1,5 +1,5 @@
 environment_config:
-  n_agents: 20
+  n_agents: 10
   n_dim: 2
   ep_length: 20
   freeze: True
@@ -59,9 +59,9 @@ run_config:
   n_run: 5
 
 train_config:
-  max_episodes: 1000
+  max_episodes: 2000
   use_gbest: False
-  update_timestep: 50
+  update_timestep: 100
   save_interval: 100
   render_interval: 100
   decay_timestep: 50

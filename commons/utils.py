@@ -125,7 +125,7 @@ def get_policy(config:dict, mode:str = "train") -> MAPPO:
 
     return policy
     
-def plot_agents_trajectory_combined(env, plot_directory, gif_dir, title="exp.gif", fps=1.5):
+def plot_agents_trajectory_combined(env, plot_directory, gif_dir, title="exp.gif", fps=1, **kwargs):
     count = 0
     func = env.optFunc
     agents_pos = env.stateHistory
@@ -155,9 +155,12 @@ def plot_agents_trajectory_combined(env, plot_directory, gif_dir, title="exp.gif
                 if i == env.bestAgentHistory[count]:
                     pos = agents_pos[i][count]
                     plt.plot(pos[0], pos[1], marker=markers[1], markersize=15, markerfacecolor='g')
+                elif i == kwargs['attention_agent']:
+                    pos = agents_pos[i][count]
+                    plt.plot(pos[0], pos[1], marker=markers[0], markersize=20, markerfacecolor='r')
                 else:
                     pos = agents_pos[i][count]
-                    plt.plot(pos[0], pos[1], marker=markers[0], markersize=15, markerfacecolor='k')
+                    plt.plot(pos[0], pos[1], marker=markers[0], markersize=15, color='k')
         
         elif env.n_dim > 2:
             raise ValueError("Cannot plot more than 2 dimensions")

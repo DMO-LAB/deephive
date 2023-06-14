@@ -26,6 +26,6 @@ if __name__ == '__main__':
     # POLICY
     policy = get_policy(config, mode)
     # MAIN
-    main(title, env, policy, mode=mode, config=config)
+    main(title, env, policy, mode=mode, config=config, log=log, tags=tags)
 
 
